@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import api from '../services/api';
-import { Upload, FileText, CheckCircle2, AlertCircle, Download, X, HelpCircle } from 'lucide-react';
+import { Upload, CheckCircle2, AlertCircle, Download, X, HelpCircle, Loader2 } from 'lucide-react';
 
 export default function ImportCsvModal({ onClose, onSuccess }) {
   const [csvText, setCsvText] = useState('');
   const [parsedData, setParsedData] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [progressMsg, setProgressMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
   const sampleCsvTemplate = `codigo_barras,nombre,precio,stock_actual,stock_minimo,stock_maximo,tipo_venta
@@ -17,6 +18,7 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
   const parseCsvContent = (content) => {
     setErrorMsg('');
     setSuccessMsg('');
+    setProgressMsg('');
     const lines = content.split(/\r?\n/).filter(line => line.trim().length > 0);
     if (lines.length === 0) {
       setParsedData([]);
@@ -75,7 +77,6 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
         const rawTipo = tipoIdx !== -1 ? parts[tipoIdx] : (parts[6] || '');
         tipo_venta = (rawTipo || '').toUpperCase().includes('PES') || (rawTipo || '').toUpperCase().includes('KILO') ? 'PESABLE' : 'UNITARIO';
       } else {
-        // Fallback positional order (0: code, 1: name, 2: price, 3: stock...)
         code = parts[0];
         nombre = parts[1];
         precio = parseFloat(parts[2]) || 0;
@@ -133,19 +134,34 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
     try {
       setLoading(true);
       setErrorMsg('');
-      const res = await api.post('/productos/importar', parsedData);
+      setProgressMsg('');
 
-      if (res.data.success) {
-        setSuccessMsg(res.data.message);
-        if (onSuccess) onSuccess();
-        setTimeout(() => {
-          onClose();
-        }, 1800);
+      const CHUNK_SIZE = 1000;
+      let totalCreados = 0;
+      let totalActualizados = 0;
+
+      for (let i = 0; i < parsedData.length; i += CHUNK_SIZE) {
+        const chunk = parsedData.slice(i, i + CHUNK_SIZE);
+        const currentCount = Math.min(i + CHUNK_SIZE, parsedData.length);
+        setProgressMsg(`Procesando ${currentCount.toLocaleString()} de ${parsedData.length.toLocaleString()} productos...`);
+
+        const res = await api.post('/productos/importar', chunk);
+        if (res.data.data) {
+          totalCreados += res.data.data.creados || 0;
+          totalActualizados += res.data.data.actualizados || 0;
+        }
       }
+
+      setSuccessMsg(`¡Importación completada con éxito! ${totalCreados} creados, ${totalActualizados} actualizados.`);
+      if (onSuccess) onSuccess();
+      setTimeout(() => {
+        onClose();
+      }, 2000);
     } catch (err) {
       setErrorMsg(err.response?.data?.message || 'Error al importar productos masivamente');
     } finally {
       setLoading(false);
+      setProgressMsg('');
     }
   };
 
@@ -159,7 +175,7 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
             <Upload className="w-5 h-5 text-emerald-400" />
             <h2 className="text-sm font-bold text-zinc-100">Importación Masiva de Productos (CSV / Excel)</h2>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white p-1 rounded-lg">
+          <button onClick={onClose} disabled={loading} className="text-zinc-500 hover:text-white p-1 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -184,6 +200,13 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
             </div>
           )}
 
+          {progressMsg && (
+            <div className="p-3 bg-indigo-950/60 border border-indigo-500/40 rounded-xl flex items-center gap-2 text-indigo-300 text-xs animate-pulse">
+              <Loader2 className="w-4 h-4 shrink-0 animate-spin text-indigo-400" />
+              <span>{progressMsg}</span>
+            </div>
+          )}
+
           {successMsg && (
             <div className="p-3 bg-emerald-950/60 border border-emerald-500/40 rounded-xl flex items-center gap-2 text-emerald-300 text-xs">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -201,7 +224,8 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
                 type="file"
                 accept=".csv, .txt"
                 onChange={handleFileUpload}
-                className="block w-full text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700 cursor-pointer"
+                disabled={loading}
+                className="block w-full text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700 cursor-pointer disabled:opacity-50"
               />
             </div>
 
@@ -210,7 +234,8 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
               <button
                 type="button"
                 onClick={handleLoadSample}
-                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors"
+                disabled={loading}
+                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
               >
                 <Download className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Cargar Ejemplo Básicos</span>
@@ -226,9 +251,10 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
             <textarea
               rows={5}
               value={csvText}
+              disabled={loading}
               onChange={(e) => handleTextChange(e.target.value)}
               placeholder="codigo_barras,nombre,precio,stock_actual..."
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs font-mono text-zinc-200 input-focus"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs font-mono text-zinc-200 input-focus disabled:opacity-50"
             />
           </div>
 
@@ -237,7 +263,7 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-zinc-300">
-                  Vista Previa de Productos Detectados ({parsedData.length}):
+                  Vista Previa de Productos Detectados ({parsedData.length.toLocaleString()}):
                 </span>
               </div>
               <div className="border border-zinc-800 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
@@ -273,7 +299,8 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-medium transition-colors"
+            disabled={loading}
+            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-medium transition-colors disabled:opacity-50"
           >
             Cancelar
           </button>
@@ -281,9 +308,10 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
             type="button"
             onClick={handleSubmitImport}
             disabled={loading || parsedData.length === 0}
-            className="btn-primary px-6 py-2 text-xs font-semibold rounded-xl disabled:opacity-50"
+            className="btn-primary px-6 py-2 text-xs font-semibold rounded-xl disabled:opacity-50 flex items-center gap-2"
           >
-            {loading ? 'Importando...' : `Importar ${parsedData.length} Productos`}
+            {loading && <Loader2 className="w-4 h-4 animate-spin text-white" />}
+            <span>{loading ? 'Procesando...' : `Importar ${parsedData.length.toLocaleString()} Productos`}</span>
           </button>
         </div>
 
