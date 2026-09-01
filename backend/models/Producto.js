@@ -35,6 +35,11 @@ const Producto = sequelize.define('Producto', {
     allowNull: false,
     defaultValue: 0
   },
+  stock_maximo: {
+    type: DataTypes.DECIMAL(10, 3),
+    allowNull: false,
+    defaultValue: 100.000
+  },
   activo: {
     type: DataTypes.BOOLEAN,
     allowNull: false,

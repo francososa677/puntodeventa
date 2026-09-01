@@ -17,10 +17,44 @@ async function getAllProductos(query = {}) {
     ];
   }
 
-  return await Producto.findAll({
-    where,
-    order: [['nombre', 'ASC']]
-  });
+  const { DetalleVenta } = require('../models');
+
+  const productos = await Producto.findAll({ where, raw: true });
+
+  try {
+    const ventasStats = await DetalleVenta.findAll({
+      attributes: [
+        'producto_id',
+        [sequelize.fn('SUM', sequelize.col('cantidad')), 'ventas_totales']
+      ],
+      where: { producto_id: { [Op.ne]: null } },
+      group: ['producto_id'],
+      raw: true
+    });
+
+    const salesMap = {};
+    ventasStats.forEach(v => {
+      if (v.producto_id) {
+        salesMap[v.producto_id] = parseFloat(v.ventas_totales) || 0;
+      }
+    });
+
+    const result = productos.map(p => ({
+      ...p,
+      ventas_totales: salesMap[p.id] || 0
+    }));
+
+    if (query.orderBy === 'popular' || !query.orderBy) {
+      result.sort((a, b) => b.ventas_totales - a.ventas_totales || a.nombre.localeCompare(b.nombre));
+    } else {
+      result.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    }
+
+    return result;
+  } catch (err) {
+    productos.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    return productos;
+  }
 }
 
 async function getProductoByCodigoBarras(codigo) {
@@ -28,7 +62,7 @@ async function getProductoByCodigoBarras(codigo) {
 }
 
 async function createProducto(data, adminUserId) {
-  const { codigo_barras, nombre, tipo_venta, precio, stock_actual, stock_minimo } = data;
+  const { codigo_barras, nombre, tipo_venta, precio, stock_actual, stock_minimo, stock_maximo } = data;
 
   // Validar unicidad cruzada con Producto y Promoción
   const existingProducto = await Producto.findOne({ where: { codigo_barras } });
@@ -54,6 +88,7 @@ async function createProducto(data, adminUserId) {
     precio,
     stock_actual: stock_actual || 0,
     stock_minimo: stock_minimo || 0,
+    stock_maximo: stock_maximo !== undefined && stock_maximo !== null ? stock_maximo : 100,
     activo: true
   });
 
@@ -102,6 +137,7 @@ async function updateProducto(id, data, adminUserId) {
   if (data.tipo_venta) producto.tipo_venta = data.tipo_venta;
   if (data.precio !== undefined) producto.precio = data.precio;
   if (data.stock_minimo !== undefined) producto.stock_minimo = data.stock_minimo;
+  if (data.stock_maximo !== undefined) producto.stock_maximo = data.stock_maximo;
   if (data.activo !== undefined) producto.activo = data.activo;
 
   producto.updated_at = new Date();

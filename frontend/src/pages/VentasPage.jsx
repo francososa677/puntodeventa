@@ -23,7 +23,7 @@ export default function VentasPage() {
   const { cajaAbierta, estadoCaja } = useCaja();
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [productosBusqueda, setProductosBusqueda] = useState([]);
+  const [allCatalogItems, setAllCatalogItems] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [cartItems, setCartItems] = useState([]);
   const [mediosPago, setMediosPago] = useState([]);
@@ -53,34 +53,48 @@ export default function VentasPage() {
       .catch(err => console.error(err));
   }, []);
 
-  // Search product and promotions as user types
-  useEffect(() => {
-    if (searchTerm.trim().length > 1) {
-      Promise.all([
-        api.get(`/productos?search=${encodeURIComponent(searchTerm)}&activo=true`),
-        api.get(`/promociones?search=${encodeURIComponent(searchTerm)}&activa=true`)
-      ])
-        .then(([resProd, resPromo]) => {
-          const prods = resProd.data.success ? resProd.data.productos.map(p => ({ ...p, isPromo: false })) : [];
-          const promos = resPromo.data.success ? resPromo.data.promociones.map(p => ({
-            id: `promo_${p.id}`,
-            realPromoId: p.id,
-            nombre: `[PROMO] ${p.nombre}`,
-            codigo_barras: p.codigo_barras,
-            precio: parseFloat(p.precio_promocional),
-            stock_actual: 'Combo',
-            tipo_venta: 'COMBO',
-            isPromo: true,
-            rawPromo: p
-          })) : [];
-          setProductosBusqueda([...prods, ...promos]);
-          setSelectedIndex(0);
-        })
-        .catch(err => console.error(err));
-    } else {
-      setProductosBusqueda([]);
-      setSelectedIndex(0);
+  // Load full catalog (products ordered by popularity + promotions)
+  const cargarCatalogoCompleto = async () => {
+    try {
+      const [resProd, resPromo] = await Promise.all([
+        api.get('/productos?activo=true&orderBy=popular'),
+        api.get('/promociones?activa=true')
+      ]);
+
+      const prods = resProd.data.success ? resProd.data.productos.map(p => ({ ...p, isPromo: false })) : [];
+      const promos = resPromo.data.success ? resPromo.data.promociones.map(p => ({
+        id: `promo_${p.id}`,
+        realPromoId: p.id,
+        nombre: `[PROMO] ${p.nombre}`,
+        codigo_barras: p.codigo_barras,
+        precio: parseFloat(p.precio_promocional),
+        stock_actual: 'Combo',
+        tipo_venta: 'COMBO',
+        isPromo: true,
+        rawPromo: p
+      })) : [];
+
+      setAllCatalogItems([...prods, ...promos]);
+    } catch (e) {
+      console.error('Error cargando catálogo:', e);
     }
+  };
+
+  useEffect(() => {
+    cargarCatalogoCompleto();
+  }, [ticketResult]);
+
+  // Compute displayed filtered items
+  const displayedItems = searchTerm.trim()
+    ? allCatalogItems.filter(item =>
+        item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.codigo_barras.includes(searchTerm.trim())
+      )
+    : allCatalogItems;
+
+  // Reset selectedIndex when filter changes
+  useEffect(() => {
+    setSelectedIndex(0);
   }, [searchTerm]);
 
   // Keep search input focused for barcode reader scanner
@@ -90,18 +104,25 @@ export default function VentasPage() {
     }
   }, [cartItems, ticketResult]);
 
-  // Handle arrow key navigation in search dropdown
+  // Handle arrow key navigation in catalog grid
   const handleKeyDown = (e) => {
-    if (productosBusqueda.length === 0) return;
+    if (displayedItems.length === 0) return;
 
-    if (e.key === 'ArrowDown') {
+    const cols = 3;
+    if (e.key === 'ArrowRight') {
       e.preventDefault();
-      setSelectedIndex(prev => (prev + 1) % productosBusqueda.length);
+      setSelectedIndex(prev => (prev + 1) % displayedItems.length);
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev - 1 + displayedItems.length) % displayedItems.length);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev + cols < displayedItems.length ? prev + cols : prev));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex(prev => (prev - 1 + productosBusqueda.length) % productosBusqueda.length);
+      setSelectedIndex(prev => (prev - cols >= 0 ? prev - cols : prev));
     } else if (e.key === 'Escape') {
-      setProductosBusqueda([]);
+      setSearchTerm('');
       setSelectedIndex(0);
     }
   };
@@ -131,30 +152,28 @@ export default function VentasPage() {
 
     try {
       // 1. If instant search results exist in state, check for exact barcode match first
-      let selectedItem = productosBusqueda.find(p => p.codigo_barras === code);
+      let selectedItem = displayedItems.find(p => p.codigo_barras === code);
       
-      // 2. If no exact barcode match, pick currently highlighted item in dropdown (selectedIndex)
-      if (!selectedItem && productosBusqueda.length > 0) {
-        const validIdx = selectedIndex >= 0 && selectedIndex < productosBusqueda.length ? selectedIndex : 0;
-        selectedItem = productosBusqueda[validIdx];
+      // 2. If no exact barcode match, pick currently highlighted item in grid (selectedIndex)
+      if (!selectedItem && displayedItems.length > 0) {
+        const validIdx = selectedIndex >= 0 && selectedIndex < displayedItems.length ? selectedIndex : 0;
+        selectedItem = displayedItems[validIdx];
       }
 
       if (selectedItem) {
         addSearchResultToCart(selectedItem);
         setSearchTerm('');
-        setProductosBusqueda([]);
         setSelectedIndex(0);
         return;
       }
 
-      // 3. If dropdown was empty (fast barcode scan before search effect), query backend search endpoint
+      // 3. If grid was empty, query backend search endpoint directly
       const resProd = await api.get(`/productos?search=${encodeURIComponent(code)}&activo=true`);
       if (resProd.data.success && resProd.data.productos.length > 0) {
         const exactMatch = resProd.data.productos.find(p => p.codigo_barras === code);
         const prodToAdd = exactMatch || resProd.data.productos[0];
         addProductoToCart(prodToAdd);
         setSearchTerm('');
-        setProductosBusqueda([]);
         setSelectedIndex(0);
         return;
       }
@@ -166,7 +185,6 @@ export default function VentasPage() {
         const promoToAdd = exactPromo || resPromo.data.promociones[0];
         addPromocionToCart(promoToAdd);
         setSearchTerm('');
-        setProductosBusqueda([]);
         setSelectedIndex(0);
         return;
       }
@@ -215,7 +233,6 @@ export default function VentasPage() {
     });
 
     setSearchTerm('');
-    setProductosBusqueda([]);
   };
 
   const addPromocionToCart = (promocion) => {
@@ -244,7 +261,6 @@ export default function VentasPage() {
     });
 
     setSearchTerm('');
-    setProductosBusqueda([]);
   };
 
   const updateQuantity = (index, delta) => {
@@ -379,7 +395,7 @@ export default function VentasPage() {
         <div className="lg:col-span-7 space-y-4">
           
           {/* Barcode / Search Input (Section 13.1) */}
-          <div className="glass-panel p-4 rounded-xl shadow-lg relative z-30">
+          <div className="glass-panel p-4 rounded-xl shadow-lg relative z-20">
             <form onSubmit={handleBarcodeSubmit} className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
                 <Barcode className="w-5 h-5 text-emerald-400" />
@@ -390,7 +406,7 @@ export default function VentasPage() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Escanee código de barras o busque producto por nombre (Flechas ⬆⬇ + Enter)..."
+                placeholder="Escanee código de barras o busque por nombre (Flechas ⬆⬇⬅➡ + Enter)..."
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-11 pr-4 py-3 text-zinc-100 placeholder-zinc-500 text-sm font-medium input-focus shadow-inner"
               />
               <button
@@ -400,71 +416,124 @@ export default function VentasPage() {
                 Buscar
               </button>
             </form>
+          </div>
 
-            {/* Dropdown Instant Search Results */}
-            {productosBusqueda.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50 max-h-60 overflow-y-auto divide-y divide-zinc-800/60">
-                {productosBusqueda.map((prod, idx) => {
+          {/* Visual Rectangular Product Cards Grid */}
+          <div className="glass-panel p-4 rounded-xl space-y-3">
+            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+              <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                <ShoppingBag className="w-4 h-4 text-emerald-400" />
+                <span>Catálogo de Productos {searchTerm.trim() ? `(Filtrado: ${displayedItems.length})` : `(${displayedItems.length})`}</span>
+              </h3>
+              <span className="text-[11px] text-zinc-500 font-mono">Ordenado por más vendidos</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto p-1 font-sans">
+              {displayedItems.length === 0 ? (
+                <div className="col-span-full py-12 text-center text-zinc-500 font-mono text-xs">
+                  No se encontraron productos para "{searchTerm}".
+                </div>
+              ) : (
+                displayedItems.map((item, idx) => {
                   const isSelected = idx === selectedIndex;
+
+                  let pct = 100;
+                  let isLowStock = false;
+                  let isOutOfStock = false;
+                  let barColorClass = 'bg-emerald-500 shadow-emerald-500/50';
+                  let stockLabel = '';
+
+                  if (!item.isPromo) {
+                    const stkActual = parseFloat(item.stock_actual) || 0;
+                    const stkMax = parseFloat(item.stock_maximo) || 100;
+                    const stkMin = parseFloat(item.stock_minimo) || 0;
+
+                    pct = Math.min(100, Math.max(0, (stkActual / stkMax) * 100));
+                    isOutOfStock = stkActual <= 0;
+                    isLowStock = stkActual <= stkMin || pct < 20;
+
+                    if (isOutOfStock) {
+                      barColorClass = 'bg-zinc-700';
+                      stockLabel = 'Sin stock';
+                    } else if (isLowStock) {
+                      barColorClass = 'bg-rose-500 shadow-rose-500/50';
+                      stockLabel = `${stkActual} ${item.tipo_venta === 'PESABLE' ? 'kg' : 'uds'}`;
+                    } else if (pct <= 50) {
+                      barColorClass = 'bg-amber-500 shadow-amber-500/50';
+                      stockLabel = `${stkActual} ${item.tipo_venta === 'PESABLE' ? 'kg' : 'uds'}`;
+                    } else {
+                      barColorClass = 'bg-emerald-500 shadow-emerald-500/50';
+                      stockLabel = `${stkActual} ${item.tipo_venta === 'PESABLE' ? 'kg' : 'uds'}`;
+                    }
+                  }
+
                   return (
-                    <button
-                      key={prod.id}
-                      type="button"
-                      onClick={() => addSearchResultToCart(prod)}
-                      className={`w-full px-4 py-2.5 text-left flex items-center justify-between transition-colors ${
+                    <div
+                      key={item.id}
+                      onClick={() => addSearchResultToCart(item)}
+                      className={`glass-panel p-3 rounded-xl transition-all cursor-pointer flex flex-col justify-between relative group border ${
                         isSelected
-                          ? 'bg-zinc-800/90 border-l-4 border-emerald-400 text-zinc-100'
-                          : 'hover:bg-zinc-800/40 text-zinc-300'
+                          ? 'border-emerald-400 bg-zinc-800/90 shadow-xl scale-[1.02] z-10'
+                          : 'border-zinc-800/80 hover:bg-zinc-800/50 hover:border-zinc-700'
                       }`}
                     >
                       <div>
-                        <div className={`text-sm font-medium flex items-center gap-2 ${isSelected ? 'text-emerald-300 font-bold' : 'text-zinc-100'}`}>
-                          <span>{prod.nombre}</span>
+                        {/* Badges */}
+                        <div className="flex items-center justify-between gap-1 mb-2">
+                          {item.isPromo ? (
+                            <span className="text-[9px] bg-purple-950 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-mono font-medium flex items-center gap-1">
+                              <Sparkles className="w-2.5 h-2.5" /> COMBO
+                            </span>
+                          ) : item.tipo_venta === 'PESABLE' ? (
+                            <span className="text-[9px] bg-sky-950 text-sky-400 border border-sky-500/30 px-1.5 py-0.5 rounded font-mono font-medium flex items-center gap-1">
+                              <Scale className="w-2.5 h-2.5" /> PESABLE
+                            </span>
+                          ) : (
+                            <span className="text-[9px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded font-mono">
+                              UNITARIO
+                            </span>
+                          )}
+
                           {isSelected && (
-                            <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded font-mono font-normal">
-                              ⏎ Enter para agregar
+                            <span className="text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-500/30 px-1 py-0.5 rounded font-mono font-bold">
+                              ⏎ Enter
                             </span>
                           )}
                         </div>
-                        <div className="text-[11px] text-zinc-500 font-mono">
-                          Cód: {prod.codigo_barras} • Stock: {prod.stock_actual} {prod.tipo_venta === 'PESABLE' ? 'kg' : 'uds'}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-emerald-400 font-mono">${parseFloat(prod.precio).toFixed(2)}</div>
-                        <span className="text-[10px] text-zinc-400 font-mono">
-                          {prod.tipo_venta === 'PESABLE' ? 'por kg' : 'por unidad'}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
 
-          {/* Catalog Helper Cards */}
-          <div className="glass-panel p-4 rounded-xl space-y-3 relative z-10">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-                Indicaciones de Venta Rápida
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-800/80 flex items-start gap-2.5">
-                <Barcode className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold text-zinc-200 block">Lector USB de Código de Barras</span>
-                  <span className="text-zinc-400">Escanee directamente los productos unitarios o combos sin hacer clic.</span>
-                </div>
-              </div>
-              <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-800/80 flex items-start gap-2.5">
-                <Scale className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold text-zinc-200 block">Productos Pesables</span>
-                  <span className="text-zinc-400">Al escanear o seleccionar un pesable se abre la calculadora Importe ↔ kg.</span>
-                </div>
-              </div>
+                        {/* Title & Code */}
+                        <h3 className="text-xs font-bold text-zinc-100 line-clamp-2 leading-tight mb-1 group-hover:text-emerald-300 transition-colors">
+                          {item.nombre}
+                        </h3>
+                        <p className="text-[10px] font-mono text-zinc-500 mb-2">Cód: {item.codigo_barras}</p>
+                      </div>
+
+                      <div>
+                        {/* Price */}
+                        <div className="text-xs font-bold text-emerald-400 font-mono mb-2">
+                          ${parseFloat(item.precio).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                          {item.tipo_venta === 'PESABLE' && <span className="text-[9px] text-zinc-400 font-normal"> /kg</span>}
+                        </div>
+
+                        {/* Visual Stock Bar */}
+                        {!item.isPromo && (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[9px] font-mono text-zinc-400">
+                              <span>Stock: {stockLabel}</span>
+                            </div>
+                            <div className="w-full bg-zinc-950 rounded-full h-2 p-0.5 border border-zinc-800 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-300 ${barColorClass}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -489,7 +558,7 @@ export default function VentasPage() {
               <div className="py-16 text-center text-zinc-500 space-y-2">
                 <ShoppingBag className="w-10 h-10 mx-auto opacity-30" />
                 <p className="text-xs">El carrito está vacío.</p>
-                <p className="text-[11px] text-zinc-600">Escanee un código de barras para comenzar.</p>
+                <p className="text-[11px] text-zinc-600">Escanee un código de barras o seleccione un producto del catálogo.</p>
               </div>
             ) : (
               <div className="space-y-2 max-h-80 overflow-y-auto pr-1">

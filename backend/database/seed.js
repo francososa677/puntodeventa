@@ -53,6 +53,7 @@ async function seed() {
       precio: 1800.00,
       stock_actual: 50,
       stock_minimo: 10,
+      stock_maximo: 100,
       activo: true
     });
 
@@ -63,6 +64,7 @@ async function seed() {
       precio: 950.00,
       stock_actual: 40,
       stock_minimo: 5,
+      stock_maximo: 80,
       activo: true
     });
 
@@ -73,6 +75,7 @@ async function seed() {
       precio: 14500.00, // Precio por kilo
       stock_actual: 5.500, // 5.5 kg
       stock_minimo: 1.000,
+      stock_maximo: 20.000,
       activo: true
     });
 
@@ -83,6 +86,7 @@ async function seed() {
       precio: 8900.00, // Precio por kilo
       stock_actual: 10.200, // 10.2 kg
       stock_minimo: 2.000,
+      stock_maximo: 30.000,
       activo: true
     });
 

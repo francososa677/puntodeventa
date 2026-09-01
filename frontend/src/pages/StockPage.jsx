@@ -45,7 +45,8 @@ export default function StockPage() {
     tipo_venta: 'UNITARIO',
     precio: '',
     stock_actual: '',
-    stock_minimo: ''
+    stock_minimo: '',
+    stock_maximo: '100'
   });
 
   // Form states for Promo
@@ -101,7 +102,8 @@ export default function StockPage() {
         tipo_venta: prod.tipo_venta,
         precio: prod.precio.toString(),
         stock_actual: prod.stock_actual.toString(),
-        stock_minimo: prod.stock_minimo.toString()
+        stock_minimo: prod.stock_minimo.toString(),
+        stock_maximo: (prod.stock_maximo || 100).toString()
       });
     } else {
       setEditingProduct(null);
@@ -111,7 +113,8 @@ export default function StockPage() {
         tipo_venta: 'UNITARIO',
         precio: '',
         stock_actual: '0',
-        stock_minimo: '0'
+        stock_minimo: '0',
+        stock_maximo: '100'
       });
     }
     setShowProductModal(true);
@@ -518,7 +521,7 @@ export default function StockPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-zinc-300 mb-1">
                     {formDataProd.tipo_venta === 'PESABLE' ? 'Precio ($/kg)' : 'Precio ($/ud)'}
@@ -544,7 +547,7 @@ export default function StockPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-300 mb-1">Stock Mínimo</label>
+                  <label className="block text-xs font-medium text-zinc-300 mb-1">Stock Mínimo (Alerta)</label>
                   <input
                     type="number"
                     step={formDataProd.tipo_venta === 'PESABLE' ? "0.001" : "1"}
@@ -552,6 +555,20 @@ export default function StockPage() {
                     value={formDataProd.stock_minimo}
                     onChange={(e) => setFormDataProd({ ...formDataProd, stock_minimo: e.target.value })}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-100 font-mono text-xs input-focus"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-300 mb-1" title="Capacidad total para la barra de nivel 100%">
+                    Stock Máx. (Capacidad 100%)
+                  </label>
+                  <input
+                    type="number"
+                    step={formDataProd.tipo_venta === 'PESABLE' ? "0.001" : "1"}
+                    required
+                    value={formDataProd.stock_maximo}
+                    onChange={(e) => setFormDataProd({ ...formDataProd, stock_maximo: e.target.value })}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-100 font-mono text-xs input-focus"
+                    placeholder="100 por defecto"
                   />
                 </div>
               </div>

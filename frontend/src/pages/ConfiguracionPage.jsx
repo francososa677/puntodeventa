@@ -98,6 +98,32 @@ export default function ConfiguracionPage() {
           ))}
         </div>
       </div>
+      {/* Section: Stock Capacity Configuration */}
+      <div className="glass-panel rounded-2xl p-6 border border-zinc-800 space-y-4">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-5 h-5 text-emerald-400" />
+          <h2 className="text-sm font-semibold text-zinc-100">Parámetros de Stock y Capacidad Visual</h2>
+        </div>
+        <p className="text-xs text-zinc-400">
+          La barra de porcentaje de nivel de stock en la grilla del punto de venta se calcula utilizando el 
+          <strong className="text-zinc-200"> Stock Máximo / Capacidad</strong> configurado en cada producto (100 unidades/kg por defecto).
+        </p>
+
+        <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-xl space-y-2 text-xs font-mono text-zinc-300">
+          <div className="flex items-center gap-2 text-emerald-400 font-bold">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+            <span>Nivel Verde (&gt; 50% de capacidad): Stock Óptimo</span>
+          </div>
+          <div className="flex items-center gap-2 text-amber-400 font-bold">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+            <span>Nivel Amarillo (20% a 50%): Stock Medio</span>
+          </div>
+          <div className="flex items-center gap-2 text-rose-400 font-bold">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+            <span>Nivel Rojo (&lt; 20% o debajo de Stock Mínimo): Stock Crítico / Reposición URGENTE</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
