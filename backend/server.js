@@ -60,6 +60,11 @@ app.use(errorHandler);
 // Inicializar DB y servidor
 async function startServer() {
   try {
+    try {
+      await sequelize.query('ALTER TABLE productos ADD COLUMN stock_maximo DECIMAL(10,3) DEFAULT 100;');
+    } catch (e) {
+      // Column already exists or table not created yet
+    }
     await sequelize.sync({ force: false });
     console.log('✔ Base de datos SQLite sincronizada correctamente');
 

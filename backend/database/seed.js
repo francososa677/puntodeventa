@@ -2,6 +2,11 @@ const bcrypt = require('bcryptjs');
 const { sequelize, Usuario, Producto, MedioPago, Promocion, PromocionProducto } = require('../models');
 
 async function seed() {
+  try {
+    await sequelize.query('ALTER TABLE productos ADD COLUMN stock_maximo DECIMAL(10,3) DEFAULT 100;');
+  } catch (e) {
+    // Column already exists
+  }
   await sequelize.sync({ force: false });
 
   // 1. Usuarios
