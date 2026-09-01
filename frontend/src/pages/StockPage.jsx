@@ -737,6 +737,8 @@ export default function StockPage() {
             </form>
           </div>
         </div>
+      )}
+
       {showImportCsvModal && (
         <ImportCsvModal
           onClose={() => setShowImportCsvModal(false)}
