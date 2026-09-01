@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Configuracion } = require('../models');
-const { authenticateToken, requireAdmin } = require('../middlewares/authMiddleware');
+const { authenticateToken, requireAdmin } = require('../middlewares/auth');
 
 // GET /api/configuracion
 router.get('/', authenticateToken, async (req, res) => {
