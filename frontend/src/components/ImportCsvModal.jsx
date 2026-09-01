@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import api from '../services/api';
-import { Upload, FileText, CheckCircle2, AlertCircle, Download, X } from 'lucide-react';
+import { Upload, FileText, CheckCircle2, AlertCircle, Download, X, HelpCircle } from 'lucide-react';
 
 export default function ImportCsvModal({ onClose, onSuccess }) {
   const [csvText, setCsvText] = useState('');
@@ -23,22 +23,67 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
       return;
     }
 
-    const items = [];
-    const firstLine = lines[0].toLowerCase();
-    const hasHeader = firstLine.includes('codigo') || firstLine.includes('nombre') || firstLine.includes('precio');
+    // Detect delimiter (, or ; or \t)
+    const sampleLine = lines[0];
+    let delimiter = ',';
+    if (sampleLine.includes(';') && !sampleLine.includes(',')) delimiter = ';';
+    else if (sampleLine.includes('\t')) delimiter = '\t';
+
+    const parseLine = (line) => line.split(delimiter).map(p => p.trim().replace(/^["']|["']$/g, ''));
+
+    const firstRow = parseLine(lines[0]);
+    const lowerFirstRow = firstRow.map(c => c.toLowerCase());
+
+    // Flexible Header Column Finder
+    const findIndex = (keywords) => {
+      return lowerFirstRow.findIndex(col => keywords.some(kw => col.includes(kw)));
+    };
+
+    const codeIdx = findIndex(['codigo', 'barras', 'ean', 'barcode', 'sku', 'code']);
+    const nameIdx = findIndex(['nombre', 'descripcion', 'producto', 'item', 'title', 'name']);
+    const priceIdx = findIndex(['precio', 'monto', 'costo', 'price', 'val']);
+    const stockIdx = findIndex(['stock_actual', 'stock', 'cantidad', 'cant', 'qty']);
+    const minIdx = findIndex(['minimo', 'min']);
+    const maxIdx = findIndex(['maximo', 'max']);
+    const tipoIdx = findIndex(['tipo', 'unidad', 'venta', 'type']);
+
+    const hasHeader = codeIdx !== -1 || nameIdx !== -1 || priceIdx !== -1;
     const startIdx = hasHeader ? 1 : 0;
 
+    const items = [];
+
     for (let i = startIdx; i < lines.length; i++) {
-      const parts = lines[i].split(',').map(p => p.trim().replace(/^["']|["']$/g, ''));
+      const parts = parseLine(lines[i]);
       if (parts.length < 2) continue;
 
-      const code = parts[0];
-      const nombre = parts[1];
-      const precio = parseFloat(parts[2]) || 0;
-      const stock_actual = parseFloat(parts[3]) || 0;
-      const stock_minimo = parseFloat(parts[4]) || 0;
-      const stock_maximo = parseFloat(parts[5]) || 100;
-      const tipo_venta = (parts[6] || '').toUpperCase() === 'PESABLE' ? 'PESABLE' : 'UNITARIO';
+      let code = '';
+      let nombre = '';
+      let precio = 0;
+      let stock_actual = 0;
+      let stock_minimo = 0;
+      let stock_maximo = 100;
+      let tipo_venta = 'UNITARIO';
+
+      if (hasHeader) {
+        code = codeIdx !== -1 ? parts[codeIdx] : parts[0];
+        nombre = nameIdx !== -1 ? parts[nameIdx] : parts[1];
+        precio = priceIdx !== -1 ? parseFloat(parts[priceIdx]) || 0 : (parseFloat(parts[2]) || 0);
+        stock_actual = stockIdx !== -1 ? parseFloat(parts[stockIdx]) || 0 : (parseFloat(parts[3]) || 0);
+        stock_minimo = minIdx !== -1 ? parseFloat(parts[minIdx]) || 0 : (parseFloat(parts[4]) || 0);
+        stock_maximo = maxIdx !== -1 ? parseFloat(parts[maxIdx]) || 100 : (parseFloat(parts[5]) || 100);
+        
+        const rawTipo = tipoIdx !== -1 ? parts[tipoIdx] : (parts[6] || '');
+        tipo_venta = (rawTipo || '').toUpperCase().includes('PES') || (rawTipo || '').toUpperCase().includes('KILO') ? 'PESABLE' : 'UNITARIO';
+      } else {
+        // Fallback positional order (0: code, 1: name, 2: price, 3: stock...)
+        code = parts[0];
+        nombre = parts[1];
+        precio = parseFloat(parts[2]) || 0;
+        stock_actual = parseFloat(parts[3]) || 0;
+        stock_minimo = parseFloat(parts[4]) || 0;
+        stock_maximo = parseFloat(parts[5]) || 100;
+        tipo_venta = (parts[6] || '').toUpperCase().includes('PES') ? 'PESABLE' : 'UNITARIO';
+      }
 
       if (code && nombre) {
         items.push({
@@ -112,7 +157,7 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
         <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Upload className="w-5 h-5 text-emerald-400" />
-            <h2 className="text-sm font-bold text-zinc-100">Importación Masiva de Productos (CSV)</h2>
+            <h2 className="text-sm font-bold text-zinc-100">Importación Masiva de Productos (CSV / Excel)</h2>
           </div>
           <button onClick={onClose} className="text-zinc-500 hover:text-white p-1 rounded-lg">
             <X className="w-5 h-5" />
@@ -121,6 +166,17 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
 
         {/* Content */}
         <div className="p-6 overflow-y-auto space-y-4 flex-1">
+          
+          <div className="p-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-xs text-zinc-300 space-y-1">
+            <div className="flex items-center gap-1.5 font-semibold text-emerald-400">
+              <HelpCircle className="w-4 h-4" />
+              <span>Detección Flexible de Archivos:</span>
+            </div>
+            <p className="text-zinc-400">
+              Soporta separadores por coma (<code className="text-emerald-400">,</code>), punto y coma (<code className="text-emerald-400">;</code>) o tabulaciones. Detecta automáticamente nombres de columnas como <em>código, nombre, precio, stock</em> en cualquier orden.
+            </p>
+          </div>
+
           {errorMsg && (
             <div className="p-3 bg-rose-950/60 border border-rose-500/40 rounded-xl flex items-center gap-2 text-rose-300 text-xs">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -139,7 +195,7 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
             {/* File Upload Box */}
             <div className="space-y-2">
               <label className="block text-xs font-medium text-zinc-300">
-                Seleccionar archivo CSV (.csv o .txt)
+                Seleccionar archivo CSV o TXT
               </label>
               <input
                 type="file"
@@ -157,7 +213,7 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
                 className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors"
               >
                 <Download className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Cargar Plantilla de Ejemplo</span>
+                <span>Cargar Ejemplo Básicos</span>
               </button>
             </div>
           </div>
@@ -165,13 +221,13 @@ export default function ImportCsvModal({ onClose, onSuccess }) {
           {/* Textarea for CSV */}
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1">
-              O pegar contenido CSV directo (Columnas: codigo_barras, nombre, precio, stock_actual, stock_minimo, stock_maximo, tipo_venta)
+              O pegar contenido CSV directo:
             </label>
             <textarea
               rows={5}
               value={csvText}
               onChange={(e) => handleTextChange(e.target.value)}
-              placeholder="codigo_barras,nombre,precio,stock_actual,stock_minimo,stock_maximo,tipo_venta..."
+              placeholder="codigo_barras,nombre,precio,stock_actual..."
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs font-mono text-zinc-200 input-focus"
             />
           </div>
