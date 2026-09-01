@@ -38,8 +38,8 @@ export default function LoginPage() {
           <div className="w-14 h-14 rounded-2xl bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 mb-3 shadow-xl shadow-emerald-950/50">
             <ShoppingBag className="w-7 h-7" />
           </div>
-          <h1 className="text-xl font-bold text-zinc-100 tracking-tight">Sistema POS Almacén</h1>
-          <p className="text-xs text-zinc-400 mt-1">Ingrese sus credenciales para acceder</p>
+          <h1 className="text-2xl font-bold text-emerald-400 tracking-tight">Stockio</h1>
+          <p className="text-xs text-zinc-400 mt-1">Sistema de Gestión de Stock & Punto de Venta</p>
         </div>
 
         <div className="glass-panel p-8 rounded-2xl shadow-2xl">

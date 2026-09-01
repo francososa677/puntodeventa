@@ -18,6 +18,7 @@ const ventaRoutes = require('./routes/ventaRoutes');
 const devolucionRoutes = require('./routes/devolucionRoutes');
 const reporteRoutes = require('./routes/reporteRoutes');
 const auditoriaRoutes = require('./routes/auditoriaRoutes');
+const configuracionRoutes = require('./routes/configuracionRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -39,6 +40,7 @@ app.use('/api/ventas', ventaRoutes);
 app.use('/api/devoluciones', devolucionRoutes);
 app.use('/api/reportes', reporteRoutes);
 app.use('/api/auditoria', auditoriaRoutes);
+app.use('/api/configuracion', configuracionRoutes);
 
 // Servir frontend compilado en producción
 const frontendDistPath = path.join(__dirname, '../frontend/dist');

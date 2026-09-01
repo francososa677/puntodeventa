@@ -1,4 +1,4 @@
-# 🛒 Sistema POS & Gestión de Almacén v2
+# 🛒 Stockio — Sistema POS & Gestión de Almacén v2
 
 Sistema integral de Punto de Venta (POS), Gestión de Inventario, Promociones y Auditoría para comercios y almacenes de barrio. Desarrollado con **Node.js + Express + Sequelize (SQLite)** en el Backend y **React + Vite + Tailwind CSS** en el Frontend.
 

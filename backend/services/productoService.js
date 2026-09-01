@@ -17,9 +17,11 @@ async function getAllProductos(query = {}) {
     ];
   }
 
-  const { DetalleVenta } = require('../models');
+  const { DetalleVenta, Configuracion } = require('../models');
 
   const productos = await Producto.findAll({ where, raw: true });
+  const config = await Configuracion.findOne({ where: { clave: 'stock_maximo_default' } });
+  const defaultMax = config ? (parseFloat(config.valor) || 100) : 100;
 
   try {
     const ventasStats = await DetalleVenta.findAll({
@@ -41,6 +43,7 @@ async function getAllProductos(query = {}) {
 
     const result = productos.map(p => ({
       ...p,
+      stock_maximo: p.stock_maximo !== null && p.stock_maximo !== undefined ? parseFloat(p.stock_maximo) : defaultMax,
       ventas_totales: salesMap[p.id] || 0
     }));
 
@@ -52,8 +55,12 @@ async function getAllProductos(query = {}) {
 
     return result;
   } catch (err) {
-    productos.sort((a, b) => a.nombre.localeCompare(b.nombre));
-    return productos;
+    const result = productos.map(p => ({
+      ...p,
+      stock_maximo: p.stock_maximo !== null && p.stock_maximo !== undefined ? parseFloat(p.stock_maximo) : defaultMax
+    }));
+    result.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    return result;
   }
 }
 

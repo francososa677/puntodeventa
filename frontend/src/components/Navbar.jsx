@@ -38,14 +38,14 @@ export default function Navbar() {
           
           {/* Logo / Brand */}
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold shadow-inner">
-              POS
+            <div className="w-9 h-9 rounded-lg bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold shadow-inner text-sm font-mono">
+              ST
             </div>
             <div>
-              <h1 className="text-sm font-semibold text-zinc-100 tracking-tight leading-none">
-                Punto de Venta
+              <h1 className="text-sm font-bold text-zinc-100 tracking-tight leading-none text-emerald-400">
+                Stockio
               </h1>
-              <p className="text-[11px] text-zinc-400 mt-0.5">Gestión de Almacén</p>
+              <p className="text-[10px] text-zinc-400 mt-0.5">Gestión de Stock & POS</p>
             </div>
           </div>
 

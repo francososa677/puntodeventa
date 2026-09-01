@@ -4,15 +4,24 @@ import { Settings, CreditCard, CheckCircle, XCircle, AlertCircle, ShieldCheck } 
 
 export default function ConfiguracionPage() {
   const [mediosPago, setMediosPago] = useState([]);
+  const [stockMaximoDefault, setStockMaximoDefault] = useState('100');
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const cargarMediosPago = async () => {
+  const cargarDatos = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/medios-pago');
-      if (res.data.success) {
-        setMediosPago(res.data.medios);
+      const [resMedios, resConfig] = await Promise.all([
+        api.get('/medios-pago'),
+        api.get('/configuracion')
+      ]);
+
+      if (resMedios.data.success) {
+        setMediosPago(resMedios.data.medios);
+      }
+      if (resConfig.data.success && resConfig.data.configuracion) {
+        setStockMaximoDefault(resConfig.data.configuracion.stock_maximo_default || '100');
       }
     } catch (e) {
       console.error(e);
@@ -22,16 +31,33 @@ export default function ConfiguracionPage() {
   };
 
   useEffect(() => {
-    cargarMediosPago();
+    cargarDatos();
   }, []);
 
   const handleToggle = async (id, currentEstado) => {
     setErrorMsg('');
+    setSuccessMsg('');
     try {
       await api.put(`/medios-pago/${id}/toggle`, { activo: !currentEstado });
-      cargarMediosPago();
+      cargarDatos();
     } catch (err) {
       setErrorMsg(err.response?.data?.message || 'Error al actualizar medio de pago');
+    }
+  };
+
+  const handleSaveStockConfig = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const res = await api.put('/configuracion', {
+        stock_maximo_default: parseFloat(stockMaximoDefault)
+      });
+      if (res.data.success) {
+        setSuccessMsg('Valor predeterminado del 100% de stock actualizado con éxito.');
+      }
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Error al guardar configuración');
     }
   };
 
@@ -40,15 +66,22 @@ export default function ConfiguracionPage() {
       <div className="border-b border-zinc-800 pb-4">
         <h1 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
           <Settings className="w-5 h-5 text-emerald-400" />
-          <span>Configuración del Sistema</span>
+          <span>Configuración del Sistema (Stockio)</span>
         </h1>
-        <p className="text-xs text-zinc-400 mt-1">Parámetros generales y medios de pago (Solo Administradores)</p>
+        <p className="text-xs text-zinc-400 mt-1">Parámetros generales, stock e integración de cobro (Solo Administradores)</p>
       </div>
 
       {errorMsg && (
         <div className="p-3 bg-rose-950/60 border border-rose-500/40 rounded-xl flex items-center gap-2 text-rose-300 text-xs">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="p-3 bg-emerald-950/60 border border-emerald-500/40 rounded-xl flex items-center gap-2 text-emerald-300 text-xs">
+          <CheckCircle className="w-4 h-4 shrink-0" />
+          <span>{successMsg}</span>
         </div>
       )}
 
@@ -98,21 +131,41 @@ export default function ConfiguracionPage() {
           ))}
         </div>
       </div>
+
       {/* Section: Stock Capacity Configuration */}
       <div className="glass-panel rounded-2xl p-6 border border-zinc-800 space-y-4">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-5 h-5 text-emerald-400" />
-          <h2 className="text-sm font-semibold text-zinc-100">Parámetros de Stock y Capacidad Visual</h2>
+          <h2 className="text-sm font-semibold text-zinc-100">Parámetros de Stock y Capacidad Visual (100%)</h2>
         </div>
         <p className="text-xs text-zinc-400">
-          La barra de porcentaje de nivel de stock en la grilla del punto de venta se calcula utilizando el 
-          <strong className="text-zinc-200"> Stock Máximo / Capacidad</strong> configurado en cada producto (100 unidades/kg por defecto).
+          Defina el valor numérico predeterminado que representa el <strong className="text-zinc-200">100% de la barra visual de stock</strong> para todos los productos que no tengan un valor personalizado.
         </p>
 
-        <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-xl space-y-2 text-xs font-mono text-zinc-300">
+        <form onSubmit={handleSaveStockConfig} className="flex flex-col sm:flex-row items-end gap-3 pt-2">
+          <div className="flex-1 w-full">
+            <label className="block text-xs font-medium text-zinc-300 mb-1">
+              Valor Predeterminado (100% Stock)
+            </label>
+            <input
+              type="number"
+              min="1"
+              required
+              value={stockMaximoDefault}
+              onChange={(e) => setStockMaximoDefault(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-zinc-100 text-sm font-mono input-focus"
+              placeholder="Ej: 100"
+            />
+          </div>
+          <button type="submit" className="btn-primary w-full sm:w-auto h-[42px] px-6">
+            Guardar Configuración
+          </button>
+        </form>
+
+        <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-xl space-y-2 text-xs font-mono text-zinc-300 mt-4">
           <div className="flex items-center gap-2 text-emerald-400 font-bold">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-            <span>Nivel Verde (&gt; 50% de capacidad): Stock Óptimo</span>
+            <span>Nivel Verde (&gt; 50% de la capacidad): Stock Óptimo</span>
           </div>
           <div className="flex items-center gap-2 text-amber-400 font-bold">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />

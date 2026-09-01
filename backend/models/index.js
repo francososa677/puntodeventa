@@ -52,6 +52,8 @@ DetalleDevolucion.belongsTo(Devolucion, { foreignKey: 'devolucion_id', as: 'devo
 DetalleDevolucion.belongsTo(Producto, { foreignKey: 'producto_id', as: 'producto' });
 DetalleDevolucion.belongsTo(Promocion, { foreignKey: 'promocion_id', as: 'promocion' });
 
+const Configuracion = require('./Configuracion');
+
 module.exports = {
   sequelize,
   Usuario,
@@ -65,5 +67,6 @@ module.exports = {
   MovimientoStock,
   Auditoria,
   Devolucion,
-  DetalleDevolucion
+  DetalleDevolucion,
+  Configuracion
 };
