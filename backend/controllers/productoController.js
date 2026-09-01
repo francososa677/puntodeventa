@@ -39,9 +39,20 @@ async function update(req, res, next) {
   }
 }
 
+async function importarMasivo(req, res, next) {
+  try {
+    const items = Array.isArray(req.body) ? req.body : (req.body.items || []);
+    const result = await productoService.importarProductosMasivo(items, req.usuario.id);
+    return res.json({ success: true, ...result, message: `Importación completada: ${result.creados} creados, ${result.actualizados} actualizados.` });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getAll,
   getByCodigo,
   create,
-  update
+  update,
+  importarMasivo
 };

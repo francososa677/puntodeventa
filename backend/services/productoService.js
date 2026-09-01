@@ -167,11 +167,59 @@ async function updateProducto(id, data, adminUserId) {
   }
 
   return producto;
+async function importarProductosMasivo(items = [], adminUserId) {
+  let creados = 0;
+  let actualizados = 0;
+
+  for (const item of items) {
+    if (!item.codigo_barras || !item.nombre) continue;
+
+    const code = String(item.codigo_barras).trim();
+    const [prod, created] = await Producto.findOrCreate({
+      where: { codigo_barras: code },
+      defaults: {
+        codigo_barras: code,
+        nombre: String(item.nombre).trim(),
+        tipo_venta: item.tipo_venta === 'PESABLE' ? 'PESABLE' : 'UNITARIO',
+        precio: parseFloat(item.precio) || 0,
+        stock_actual: parseFloat(item.stock_actual) || 0,
+        stock_minimo: parseFloat(item.stock_minimo) || 0,
+        stock_maximo: parseFloat(item.stock_maximo) || 100,
+        activo: true
+      }
+    });
+
+    if (!created) {
+      prod.nombre = String(item.nombre).trim();
+      if (item.precio !== undefined) prod.precio = parseFloat(item.precio) || 0;
+      if (item.stock_actual !== undefined) prod.stock_actual = parseFloat(item.stock_actual) || 0;
+      if (item.stock_minimo !== undefined) prod.stock_minimo = parseFloat(item.stock_minimo) || 0;
+      if (item.stock_maximo !== undefined) prod.stock_maximo = parseFloat(item.stock_maximo) || 100;
+      if (item.tipo_venta) prod.tipo_venta = item.tipo_venta === 'PESABLE' ? 'PESABLE' : 'UNITARIO';
+      prod.activo = true;
+      await prod.save();
+      actualizados++;
+    } else {
+      creados++;
+    }
+  }
+
+  if (adminUserId) {
+    await registrarAuditoria(
+      adminUserId,
+      'IMPORTACION_MASIVA',
+      'PRODUCTO',
+      `Importación masiva: ${creados} creados, ${actualizados} actualizados`
+    );
+  }
+
+  return { creados, actualizados, total: items.length };
 }
 
 module.exports = {
   getAllProductos,
   getProductoByCodigoBarras,
   createProducto,
-  updateProducto
+  updateProducto,
+  importarProductosMasivo
 };

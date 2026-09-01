@@ -9,6 +9,7 @@ router.get('/', productoController.getAll);
 router.get('/codigo/:codigo', productoController.getByCodigo);
 
 // Administrative actions require ADMIN role
+router.post('/importar', requireAdmin, productoController.importarMasivo);
 router.post('/', requireAdmin, productoController.create);
 router.put('/:id', requireAdmin, productoController.update);
 

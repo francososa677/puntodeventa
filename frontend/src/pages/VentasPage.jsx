@@ -18,6 +18,7 @@ import {
 import PesableModal from '../components/PesableModal';
 import TicketModal from '../components/TicketModal';
 import AbrirCajaModal from '../components/AbrirCajaModal';
+import QuickCreateProductModal from '../components/QuickCreateProductModal';
 
 export default function VentasPage() {
   const { cajaAbierta, estadoCaja } = useCaja();
@@ -36,6 +37,8 @@ export default function VentasPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [loadingCheckout, setLoadingCheckout] = useState(false);
   const [showAbrirCajaModal, setShowAbrirCajaModal] = useState(false);
+  const [unregisteredBarcode, setUnregisteredBarcode] = useState(null);
+  const [showQuickCreateModal, setShowQuickCreateModal] = useState(false);
 
   const searchInputRef = useRef(null);
 
@@ -189,7 +192,8 @@ export default function VentasPage() {
         return;
       }
 
-      setErrorMsg(`No se encontró ningún producto o promoción para: "${code}"`);
+      setErrorMsg(`El código de barras "${code}" no está registrado.`);
+      setUnregisteredBarcode(code);
     } catch (err) {
       setErrorMsg(`Error al buscar producto: ${err.message}`);
     }
@@ -382,10 +386,21 @@ export default function VentasPage() {
       {errorMsg && (
         <div className="p-3 bg-rose-950/60 border border-rose-500/40 rounded-xl flex items-center justify-between gap-2 text-rose-300 text-xs animate-in fade-in">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
             <span>{errorMsg}</span>
           </div>
-          <button onClick={() => setErrorMsg('')} className="text-rose-400 font-bold hover:text-white">✕</button>
+          <div className="flex items-center gap-2">
+            {unregisteredBarcode && (
+              <button
+                type="button"
+                onClick={() => setShowQuickCreateModal(true)}
+                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all shadow-md cursor-pointer whitespace-nowrap"
+              >
+                + Registrar Producto Ahora
+              </button>
+            )}
+            <button onClick={() => { setErrorMsg(''); setUnregisteredBarcode(null); }} className="text-rose-400 font-bold hover:text-white px-1">✕</button>
+          </div>
         </div>
       )}
 
@@ -693,6 +708,20 @@ export default function VentasPage() {
 
       {showAbrirCajaModal && (
         <AbrirCajaModal onClose={() => setShowAbrirCajaModal(false)} />
+      )}
+
+      {showQuickCreateModal && (
+        <QuickCreateProductModal
+          scannedBarcode={unregisteredBarcode}
+          onClose={() => setShowQuickCreateModal(false)}
+          onSuccess={(newProd) => {
+            cargarCatalogoCompleto();
+            addProductoToCart(newProd);
+            setShowQuickCreateModal(false);
+            setUnregisteredBarcode(null);
+            setErrorMsg('');
+          }}
+        />
       )}
 
     </div>

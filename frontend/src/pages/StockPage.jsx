@@ -13,8 +13,10 @@ import {
   CheckCircle,
   XCircle,
   Tag,
-  Scale
+  Scale,
+  Upload
 } from 'lucide-react';
+import ImportCsvModal from '../components/ImportCsvModal';
 
 export default function StockPage() {
   const { isAdmin } = useAuth();
@@ -28,6 +30,7 @@ export default function StockPage() {
 
   // Modals state
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showImportCsvModal, setShowImportCsvModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   
   const [showStockModal, setShowStockModal] = useState(false);
@@ -249,13 +252,24 @@ export default function StockPage() {
             </div>
 
             {isAdmin && (
-              <button
-                onClick={() => handleOpenProductModal()}
-                className="btn-primary w-full sm:w-auto"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Nuevo Producto</span>
-              </button>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setShowImportCsvModal(true)}
+                  className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Upload className="w-4 h-4 text-emerald-400" />
+                  <span>Importar CSV / Masivo</span>
+                </button>
+
+                <button
+                  onClick={() => handleOpenProductModal()}
+                  className="btn-primary w-full sm:w-auto"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Nuevo Producto</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -723,6 +737,11 @@ export default function StockPage() {
             </form>
           </div>
         </div>
+      {showImportCsvModal && (
+        <ImportCsvModal
+          onClose={() => setShowImportCsvModal(false)}
+          onSuccess={cargarProductos}
+        />
       )}
 
     </div>
