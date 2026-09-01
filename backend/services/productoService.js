@@ -19,7 +19,14 @@ async function getAllProductos(query = {}) {
 
   const { DetalleVenta, Configuracion } = require('../models');
 
-  const productos = await Producto.findAll({ where, raw: true });
+  const limit = query.limit ? parseInt(query.limit) : 500;
+
+  const productos = await Producto.findAll({
+    where,
+    raw: true,
+    limit: limit > 0 ? limit : 500
+  });
+
   const config = await Configuracion.findOne({ where: { clave: 'stock_maximo_default' } });
   const defaultMax = config ? (parseFloat(config.valor) || 100) : 100;
 
@@ -59,72 +66,81 @@ async function getAllProductos(query = {}) {
       ...p,
       stock_maximo: p.stock_maximo !== null && p.stock_maximo !== undefined ? parseFloat(p.stock_maximo) : defaultMax
     }));
-    result.sort((a, b) => a.nombre.localeCompare(b.nombre));
     return result;
   }
 }
 
-async function getProductoByCodigoBarras(codigo) {
-  return await Producto.findOne({ where: { codigo_barras: codigo, activo: true } });
+async function getProductoByCodigoBarras(codigo_barras) {
+  return await Producto.findOne({ where: { codigo_barras, activo: true } });
 }
 
 async function createProducto(data, adminUserId) {
-  const { codigo_barras, nombre, tipo_venta, precio, stock_actual, stock_minimo, stock_maximo } = data;
-
-  // Validar unicidad cruzada con Producto y Promoción
-  const existingProducto = await Producto.findOne({ where: { codigo_barras } });
-  if (existingProducto) {
-    const err = new Error('El código de barras ya pertenece a otro producto');
-    err.status = 400;
-    err.code = 'BARCODE_EXISTS';
-    throw err;
+  if (!data.codigo_barras || !data.nombre || data.precio === undefined) {
+    const error = new Error('Código de barras, nombre y precio son requeridos');
+    error.status = 400;
+    error.code = 'INVALID_PRODUCT_DATA';
+    throw error;
   }
 
-  const existingPromo = await Promocion.findOne({ where: { codigo_barras } });
+  const existingProd = await Producto.findOne({ where: { codigo_barras: data.codigo_barras } });
+  if (existingProd) {
+    const error = new Error('El código de barras ya pertenece a otro producto');
+    error.status = 400;
+    error.code = 'BARCODE_EXISTS';
+    throw error;
+  }
+
+  const existingPromo = await Promocion.findOne({ where: { codigo_barras: data.codigo_barras } });
   if (existingPromo) {
-    const err = new Error('El código de barras ya pertenece a una promoción registrada');
-    err.status = 400;
-    err.code = 'BARCODE_EXISTS_PROMO';
-    throw err;
+    const error = new Error('El código de barras ya pertenece a una promoción');
+    error.status = 400;
+    error.code = 'BARCODE_EXISTS_PROMO';
+    throw error;
   }
 
-  const nuevo = await Producto.create({
-    codigo_barras,
-    nombre,
-    tipo_venta: tipo_venta || 'UNITARIO',
-    precio,
-    stock_actual: stock_actual || 0,
-    stock_minimo: stock_minimo || 0,
-    stock_maximo: stock_maximo !== undefined && stock_maximo !== null ? stock_maximo : 100,
-    activo: true
+  const producto = await Producto.create({
+    codigo_barras: data.codigo_barras,
+    nombre: data.nombre,
+    tipo_venta: data.tipo_venta || 'UNITARIO',
+    precio: data.precio,
+    stock_actual: data.stock_actual !== undefined ? data.stock_actual : 0,
+    stock_minimo: data.stock_minimo !== undefined ? data.stock_minimo : 0,
+    stock_maximo: data.stock_maximo !== undefined ? data.stock_maximo : 100,
+    activo: data.activo !== undefined ? data.activo : true
   });
 
-  await registrarAuditoria(
-    adminUserId,
-    'CREAR_PRODUCTO',
-    'PRODUCTO',
-    `Producto creado: ${nuevo.nombre} (${nuevo.codigo_barras}) - Tipo: ${nuevo.tipo_venta} - Precio: $${nuevo.precio}`
-  );
+  if (adminUserId) {
+    await registrarAuditoria(
+      adminUserId,
+      'CREAR_PRODUCTO',
+      'PRODUCTO',
+      `Producto creado: ${producto.nombre} (Cód: ${producto.codigo_barras})`
+    );
+  }
 
-  return nuevo;
+  return producto;
 }
 
 async function updateProducto(id, data, adminUserId) {
   const producto = await Producto.findByPk(id);
   if (!producto) {
-    const err = new Error('Producto no encontrado');
-    err.status = 404;
-    err.code = 'PRODUCT_NOT_FOUND';
-    throw err;
+    const error = new Error('Producto no encontrado');
+    error.status = 404;
+    error.code = 'PRODUCT_NOT_FOUND';
+    throw error;
   }
 
-  const precioAnterior = parseFloat(producto.precio);
-  const nuevoPrecio = data.precio !== undefined ? parseFloat(data.precio) : precioAnterior;
-  const cambioPrecio = nuevoPrecio !== precioAnterior;
+  let cambioPrecio = false;
+  let precioAnterior = producto.precio;
+  let nuevoPrecio = data.precio;
+
+  if (data.precio !== undefined && parseFloat(data.precio) !== parseFloat(producto.precio)) {
+    cambioPrecio = true;
+  }
 
   if (data.codigo_barras && data.codigo_barras !== producto.codigo_barras) {
-    const existingProducto = await Producto.findOne({ where: { codigo_barras: data.codigo_barras } });
-    if (existingProducto) {
+    const existingProd = await Producto.findOne({ where: { codigo_barras: data.codigo_barras } });
+    if (existingProd && existingProd.id !== producto.id) {
       const err = new Error('El código de barras ya pertenece a otro producto');
       err.status = 400;
       err.code = 'BARCODE_EXISTS';
@@ -167,6 +183,8 @@ async function updateProducto(id, data, adminUserId) {
   }
 
   return producto;
+}
+
 async function importarProductosMasivo(items = [], adminUserId) {
   let creados = 0;
   let actualizados = 0;
